@@ -95,10 +95,7 @@ class Criterion(nn.Module):
         :return: rr loss
         """""
         if invalid_mask is not None:
-            if inputs.sampled_cols is not None:
-                invalid_mask = batched_index_select(invalid_mask, 2, inputs.sampled_cols)
-            if inputs.sampled_rows is not None:
-                invalid_mask = batched_index_select(invalid_mask, 1, inputs.sampled_rows)
+            invalid_mask = invalid_mask[:, ::4, ::4]
 
         # compute rr loss in non-occluded region
         gt_response = outputs['gt_response']
@@ -136,14 +133,8 @@ class Criterion(nn.Module):
         """
         disp = inputs.disp
         if not fullres:
-            if inputs.sampled_cols is not None:
-                if invalid_mask is not None:
-                    invalid_mask = batched_index_select(invalid_mask, 2, inputs.sampled_cols)
-                disp = batched_index_select(disp, 2, inputs.sampled_cols)
-            if inputs.sampled_rows is not None:
-                if invalid_mask is not None:
-                    invalid_mask = batched_index_select(invalid_mask, 1, inputs.sampled_rows)
-                disp = batched_index_select(disp, 1, inputs.sampled_rows)
+            invalid_mask = invalid_mask[:, ::4, ::4]
+            disp = disp[:, ::4, ::4]
 
         return self.l1_criterion(pred[~invalid_mask], disp[~invalid_mask])
 
@@ -203,6 +194,11 @@ class Criterion(nn.Module):
         loss['occ_be'] = self.compute_entropy_loss(outputs['occ_pred'], inputs, invalid_mask)
 
         self.aggregate_loss(loss)
+
+        if torch.isnan(loss['aggregated']):
+            torch.save('loss.dat', loss)
+            torch.save('inputs.dat', inputs)
+            torch.save('outputs.dat', outputs)
 
         # for benchmarking
         self.calc_px_error(outputs['disp_pred'], inputs.disp, loss, invalid_mask)

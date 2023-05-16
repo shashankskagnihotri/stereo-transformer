@@ -73,15 +73,12 @@ class RegressionHead(nn.Module):
 
         return disp_pred_low_res.sum(-1), norm
 
-    def _compute_gt_location(self, scale: int, sampled_cols: Tensor, sampled_rows: Tensor,
-                             attn_weight: Tensor, disp: Tensor):
+    def _compute_gt_location(self, scale: float, attn_weight: Tensor, disp: Tensor):
         """
         Find target locations using ground truth disparity.
         Find ground truth response at those locations using attention weight.
 
         :param scale: high-res to low-res disparity scale
-        :param sampled_cols: index to downsample columns
-        :param sampled_rows: index to downsample rows
         :param attn_weight: attention weight (output from _optimal_transport), [N,H,W,W]
         :param disp: ground truth disparity
         :return: response at ground truth location [N,H,W,1] and target ground truth locations [N,H,W,1]
@@ -89,12 +86,7 @@ class RegressionHead(nn.Module):
         # compute target location at full res
         _, _, w = disp.size()
         pos_l = torch.linspace(0, w - 1, w)[None,].to(disp.device)  # 1 x 1 x W (left)
-        target = (pos_l - disp)[..., None]  # N x H x W (left) x 1
-
-        if sampled_cols is not None:
-            target = batched_index_select(target, 2, sampled_cols)
-        if sampled_rows is not None:
-            target = batched_index_select(target, 1, sampled_rows)
+        target = (pos_l - disp)[:, ::4, ::4, None]  # N x H x W (left) x 1
         target = target / scale  # scale target location
 
         # compute ground truth response location for rr loss
@@ -102,7 +94,7 @@ class RegressionHead(nn.Module):
 
         return gt_response, target
 
-    def _upsample(self, x: NestedTensor, disp_pred: Tensor, occ_pred: Tensor, scale: int):
+    def _upsample(self, x: NestedTensor, disp_pred: Tensor, occ_pred: Tensor, scale: float):
         """
         Upsample the raw prediction to full resolution
 
@@ -118,8 +110,8 @@ class RegressionHead(nn.Module):
         disp_pred_attn = disp_pred * scale
 
         # upsample
-        disp_pred = F.interpolate(disp_pred_attn[None,], size=(h, w), mode='nearest')  # N x 1 x H x W
-        occ_pred = F.interpolate(occ_pred[None,], size=(h, w), mode='nearest')  # N x 1 x H x W
+        disp_pred = F.interpolate(disp_pred_attn[:, None, ], size=(h, w), mode='nearest')  # N x 1 x H x W
+        occ_pred = F.interpolate(occ_pred[:, None, ], size=(h, w), mode='nearest')  # N x 1 x H x W
 
         if self.cal is not None:
             # normalize disparity
@@ -233,10 +225,7 @@ class RegressionHead(nn.Module):
         output = {}
 
         # compute scale
-        if x.sampled_cols is not None:
-            scale = x.left.size(-1) / float(x.sampled_cols.size(-1))
-        else:
-            scale = 1.0
+        scale = 4.0
 
         # normalize attention to 0-1
         if self.ot:
@@ -249,22 +238,15 @@ class RegressionHead(nn.Module):
         # compute relative response (RR) at ground truth location
         if x.disp is not None:
             # find ground truth response (gt_response) and location (target)
-            output['gt_response'], target = self._compute_gt_location(scale, x.sampled_cols, x.sampled_rows,
-                                                                      attn_ot[..., :-1, :-1], x.disp)
+            output['gt_response'], target = self._compute_gt_location(scale, attn_ot[..., :-1, :-1], x.disp)
         else:
             output['gt_response'] = None
 
         # compute relative response (RR) at occluded location
         if x.occ_mask is not None:
             # handle occlusion
-            occ_mask = x.occ_mask
-            occ_mask_right = x.occ_mask_right
-            if x.sampled_cols is not None:
-                occ_mask = batched_index_select(occ_mask, 2, x.sampled_cols)
-                occ_mask_right = batched_index_select(occ_mask_right, 2, x.sampled_cols)
-            if x.sampled_rows is not None:
-                occ_mask = batched_index_select(occ_mask, 1, x.sampled_rows)
-                occ_mask_right = batched_index_select(occ_mask_right, 1, x.sampled_rows)
+            occ_mask = x.occ_mask[:, ::4, ::4]
+            occ_mask_right = x.occ_mask_right[:, ::4, ::4]
 
             output['gt_response_occ_left'] = attn_ot[..., :-1, -1][occ_mask]
             output['gt_response_occ_right'] = attn_ot[..., -1, :-1][occ_mask_right]
@@ -285,14 +267,9 @@ class RegressionHead(nn.Module):
         #     torch.save(target, f)
 
         # upsample and context adjust
-        if x.sampled_cols is not None:
-            output['disp_pred'], output['disp_pred_low_res'], output['occ_pred'] = self._upsample(x, disp_pred_low_res,
-                                                                                                  occ_pred_low_res,
-                                                                                                  scale)
-        else:
-            output['disp_pred'] = disp_pred_low_res
-            output['occ_pred'] = occ_pred_low_res
-
+        output['disp_pred'], output['disp_pred_low_res'], output['occ_pred'] = self._upsample(x, disp_pred_low_res,
+                                                                                              occ_pred_low_res,
+                                                                                              scale)
         return output
 
 

@@ -72,6 +72,11 @@ class MultiheadAttentionRelative(nn.MultiheadAttention):
             _end = 2 * embed_dim
             _w = self.in_proj_weight[_start:_end, :]
             _b = self.in_proj_bias[_start:_end]
+            #print(type(pos_enc), type(_w), type(_b))
+            """
+            Halfing added here for ICML
+            """
+            pos_enc = pos_enc.half()
             q_r, k_r = F.linear(pos_enc, _w, _b).chunk(2, dim=-1)  # WxW'xC
         else:
             q_r = None
@@ -114,6 +119,7 @@ class MultiheadAttentionRelative(nn.MultiheadAttention):
         # apply attn mask
         if attn_mask is not None:
             attn_mask = attn_mask[None, None, ...]
+            assert list(attn_mask.size()) == [1, 1, w, w], "wrong shape for attn mask"
             attn += attn_mask
 
         # raw attn

@@ -143,7 +143,7 @@ class SceneFlowFlyingThingsDataset(data.Dataset):
             result['disp'] = np.nan_to_num(disp, nan=0.0)
             result['disp_right'] = np.nan_to_num(disp_right, nan=0.0)
 
-            # random crop        
+            # random crop
             result = random_crop(360, 640, result, self.split)
         else:
             result['occ_mask'] = occ_left

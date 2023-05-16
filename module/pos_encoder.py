@@ -30,24 +30,14 @@ class PositionEncodingSine1DRelative(nn.Module):
     def forward(self, inputs: NestedTensor):
         """
         :param inputs: NestedTensor
-        :return: pos encoding [N,C,H,2W-1]
+        :return: pos encoding [2W-1,C]
         """
         x = inputs.left
-
-        # update h and w if downsampling
-        bs, _, h, w = x.size()
-        if inputs.sampled_cols is not None:
-            bs, w = inputs.sampled_cols.size()
-        if inputs.sampled_rows is not None:
-            _, h = inputs.sampled_rows.size()
+        bs, _, _, w = x.size()
+        w = math.ceil(w / 4)
 
         # populate all possible relative distances
         x_embed = torch.linspace(w - 1, -w + 1, 2 * w - 1, dtype=torch.float32, device=x.device)
-
-        # scale distance if there is down sample
-        if inputs.sampled_cols is not None:
-            scale = x.size(-1) / float(inputs.sampled_cols.size(-1))
-            x_embed = x_embed * scale
 
         if self.normalize:
             x_embed = x_embed * self.scale
@@ -69,6 +59,7 @@ def no_pos_encoding(x):
 def build_position_encoding(args):
     mode = args.position_encoding
     channel_dim = args.channel_dim
+    nheads = args.nheads
     if mode == 'sine1d_rel':
         n_steps = channel_dim
         position_encoding = PositionEncodingSine1DRelative(n_steps, normalize=False)

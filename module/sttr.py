@@ -32,8 +32,8 @@ class STTR(nn.Module):
         self.transformer = build_transformer(args)
         self.regression_head = build_regression_head(args)
 
-        self._reset_parameters()
         self._disable_batchnorm_tracking()
+        self._reset_parameters()
         self._relu_inplace()
 
     def _reset_parameters(self):
@@ -88,18 +88,13 @@ class STTR(nn.Module):
         feat_left = tokens[:bs]
         feat_right = tokens[bs:]  # NxCxHxW
 
-        # downsample
-        if x.sampled_cols is not None:
-            feat_left = batched_index_select(feat_left, 3, x.sampled_cols)
-            feat_right = batched_index_select(feat_right, 3, x.sampled_cols)
-        if x.sampled_rows is not None:
-            feat_left = batched_index_select(feat_left, 2, x.sampled_rows)
-            feat_right = batched_index_select(feat_right, 2, x.sampled_rows)
-
         # transformer
         attn_weight = self.transformer(feat_left, feat_right, pos_enc)
 
         # regress disparity and occlusion
         output = self.regression_head(attn_weight, x)
 
-        return output
+        if self.training:
+            return output
+        else:
+            return output, feat_left, feat_right

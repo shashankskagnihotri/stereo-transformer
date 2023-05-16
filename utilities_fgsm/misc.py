@@ -7,6 +7,7 @@ import copy
 import numpy as np
 import torch
 import torch.nn as nn
+import os
 
 
 class NestedTensor(object):
@@ -116,8 +117,10 @@ def find_occ_mask(disp_left, disp_right):
     return occ_mask_l, occ_mask_r
 
 
-def save_and_clear(idx, output_file):
-    with open('output-' + str(idx) + '.dat', 'wb') as f:
+def save_and_clear(idx, output_file, experiment_dir):
+    output_dir = experiment_dir + '/outputs/'
+    os.makedirs(output_dir, exist_ok=True)
+    with open(output_dir+'output-' + str(idx) + '.dat', 'wb') as f:
         torch.save(output_file, f)
     idx += 1
 
