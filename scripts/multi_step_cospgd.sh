@@ -22,7 +22,7 @@ python main_fgsm.py  --epochs 15\
                 --dataset sceneflow\
                 --dataset_directory data/SCENE_FLOW\
                 --kernel_size 3\
-                --resume old_run/sceneflow/vanilla/experiment_3/epoch_14_model.pth.tar\
+                --resume pretrained_models/vanilla/epoch_14_model.pth.tar\
                 --eval\
                 --fgsm\
                 --epsilon $1\
