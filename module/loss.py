@@ -15,7 +15,7 @@ class Criterion(nn.Module):
     Compute loss and evaluation metrics
     """
 
-    def __init__(self, threshold: int = 3, validation_max_disp: int = -1, loss_weight: list = None):
+    def __init__(self, threshold: int = 3, validation_max_disp: int = -1, loss_weight: list = None, reduction='mean'):
         super(Criterion, self).__init__()
 
         if loss_weight is None:
@@ -25,8 +25,10 @@ class Criterion(nn.Module):
         self.validation_max_disp = validation_max_disp
         self.weights = loss_weight
 
-        self.l1_criterion = nn.SmoothL1Loss()
-        self.epe_criterion = nn.L1Loss()
+        self.l1_criterion = nn.SmoothL1Loss(reduction=reduction)
+        self.epe_criterion = nn.L1Loss(reduction='mean')
+
+        self.reduction = reduction
 
     @torch.no_grad()
     def calc_px_error(self, pred: Tensor, disp: Tensor, loss_dict: dict, invalid_mask: Tensor):
@@ -119,7 +121,7 @@ class Criterion(nn.Module):
         except KeyError:
             pass
 
-        return rr_loss.mean()
+        return rr_loss.mean() if self.reduction == 'mean' else rr_loss
 
     def compute_l1_loss(self, pred: Tensor, inputs: NestedTensor, invalid_mask: Tensor, fullres: bool = True):
         """
@@ -157,7 +159,7 @@ class Criterion(nn.Module):
 
         entropy_loss = torch.cat([entropy_loss_occ, entropy_loss_noc])
 
-        return entropy_loss.mean()
+        return entropy_loss.mean() if self.reduction=='mean' else entropy_loss
 
     def aggregate_loss(self, loss_dict: dict):
         """
@@ -216,4 +218,9 @@ def build_criterion(args):
         v = float(v)
         loss_weight[k] = v
 
-    return Criterion(args.px_error_threshold, args.validation_max_disp, loss_weight)
+        if hasattr(args, 'attack'):
+            reduction='none'
+        else:
+            reduction='mean'
+
+    return Criterion(args.px_error_threshold, args.validation_max_disp, loss_weight, reduction=reduction)

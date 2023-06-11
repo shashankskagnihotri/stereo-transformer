@@ -21,9 +21,11 @@ def write_summary(stats, summary, epoch, mode):
     summary.writer.add_scalar(mode + '/3px_error', stats['px_error_rate'], epoch)
 
 # FGSM attack code
-def fgsm_attack(perturbed_image, epsilon, data_grad, orig_image, alpha):
+def fgsm_attack(perturbed_image, epsilon, data_grad, orig_image, alpha, targeted=False):
     # Collect the element-wise sign of the data gradient
     sign_data_grad = data_grad.sign()
+    if targeted:
+        sign_data_grad *= -1
     # Create the perturbed image by adjusting each pixel of the input image
     perturbed_image = perturbed_image.detach() + alpha*sign_data_grad
     # Adding clipping to maintain [0,1] range
@@ -56,15 +58,23 @@ def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args
     inputs.right = inputs.right.half()
     inputs.disp = inputs.disp.half()
 
+    if args.targeted:
+        inputs.disp = torch.zeros_like(inputs.disp) + 10**-6
+
     left_orig_image = inputs.left.clone()
     right_orig_image = inputs.right.clone()
 
-    print(left_orig_image.min(), left_orig_image.max(), right_orig_image.min(), right_orig_image.max())
+    #print(left_orig_image.min(), left_orig_image.max(), right_orig_image.min(), right_orig_image.max())
+    orig_left_min, orig_left_max, orig_right_min, orig_right_max = left_orig_image.min(), left_orig_image.max(), right_orig_image.min(), right_orig_image.max()
     
 
     if args.attack == 'cospgd' or args.attack == 'pgd':
-        inputs.left = inputs.left + torch.FloatTensor(inputs.left.shape).uniform_(-1*args.epsilon, args.epsilon).cuda()
-        inputs.right = inputs.right + torch.FloatTensor(inputs.right.shape).uniform_(-1*args.epsilon, args.epsilon).cuda()
+        moise = torch.FloatTensor(inputs.left.shape).uniform_(-1*args.epsilon, args.epsilon).cuda()
+        inputs.left = inputs.left + noise
+        inputs.right = inputs.right + noise
+        inputs.left = inputs.left.clamp(orig_left_min, orig_left_min)
+        inputs.right = inputs.right.clamp(orig_right_min, orig_right_max)
+
         if args.iterations ==1:
             alpha = args.epsilon
         else:
@@ -96,17 +106,20 @@ def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args
         for i in range(args.iterations):
 
             if args.attack == 'cospgd':
-                cossim= F.cosine_similarity(outputs['disp_pred'], inputs.disp)
-                final_loss = losses['aggregated']
-                with torch.no_grad():
-                    final_loss *= torch.sum(cossim)/(outputs['disp_pred'].shape[-1]*outputs['disp_pred'].shape[-2])
+                cossim= F.cosine_similarity(F.softmax(outputs['disp_pred'], dim=1), F.softmax(inputs.disp, dim=1))
+                final_loss = losses['aggregated']                
+                #final_loss *= torch.sum(cossim)/(outputs['disp_pred'].shape[-1]*outputs['disp_pred'].shape[-2])
+                if args.targeted:
+                    cossim = 1 - cossim
+                final_loss = cossim.detach()*final_loss
+                final_loss = final_loss.mean()
                 final_loss.backward(retain_graph=True)
             else:
-                losses['aggregated'].backward(retain_graph=True)
+                losses['aggregated'].mean().backward(retain_graph=True)
 
 
-            inputs.left = fgsm_attack(inputs.left, args.epsilon, alpha, inputs.left.grad, left_orig_image)
-            right.left = fgsm_attack(inputs.right, args.epsilon, alpha, inputs.right.grad, right_orig_image)
+            inputs.left = fgsm_attack(inputs.left, args.epsilon, alpha, inputs.left.grad, left_orig_image, targeted=args.targeted)
+            right.left = fgsm_attack(inputs.right, args.epsilon, alpha, inputs.right.grad, right_orig_image, targeted=args.targeted)
 
             inputs.left.requires_grad=True
             inputs.right.requires_grad=True
@@ -120,6 +133,9 @@ def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args
 
     
     
+    for key in losses:
+        losses[key] = losses[key].mean()
+
     if losses is None:
         return outputs, losses, disp
 

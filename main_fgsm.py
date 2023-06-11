@@ -107,6 +107,8 @@ def get_args_parser():
                         help='number of iterations for adversarial attack')
     parser.add_argument('-at', '--attack', type=str, default='fgsm', choices={'fgsm', 'cospgd', 'pgd'},
                         help='FGSM or CosPGD attack')
+    parser.add_argument('-tr', '--targeted', type=str, default='False', choices={'True', 'False'},
+                        help='FGSM or CosPGD attack')
 
     return parser
 
@@ -288,6 +290,13 @@ if __name__ == '__main__':
     args_ = ap.parse_args()
     args_.alpha *= 255
     args_.epsilon *=255
+    
+    tmp = args_.targeted
+    if tmp == 'True':
+        args_.targeted=True
+    elif tmp == 'False':
+        args_.targeted=False
+
     if args_.iterations == 1:
         args_.alpha = args_.epsilon
     main(args_)

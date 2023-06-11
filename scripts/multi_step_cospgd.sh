@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH --mem=230G
 #SBATCH --cpus-per-task=64
-#SBATCH --output=slurm/neurips/0again_new_multi_cospgd_%A.out
+###SBATCH --output=slurm/neurips/0again_new_multi_cospgd_%A.out
 
 #reload
 #sttr
@@ -16,17 +16,18 @@
 CUDA_VISIBLE_DEVICES=0
 python main_fgsm.py  --epochs 15\
                 --batch_size 1\
-                --checkpoint correct_neurips_multi_step_cospgd\
+                --checkpoint $6\
                 --pre_train\
                 --num_workers 64\
                 --dataset sceneflow\
-                --dataset_directory /work/ws-tmp/sa058646-segment2/stereo-transformer/data/SCENE_FLOW\
+                --dataset_directory data/SCENE_FLOW\
                 --kernel_size 3\
-                --resume /work/ws-tmp/sa058646-segment2/stereo-transformer/run/sceneflow/vanilla/experiment_3/epoch_14_model.pth.tar\
+                --resume old_run/sceneflow/vanilla/experiment_3/epoch_14_model.pth.tar\
                 --eval\
                 --fgsm\
                 --epsilon $1\
                 -it $3\
-                -at cospgd\
-                --alpha $2
+                -at $4\
+                --alpha $2\
+                --targeted $5
 
