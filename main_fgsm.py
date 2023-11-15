@@ -103,6 +103,8 @@ def get_args_parser():
     # * Large transposed convolution kernels, plots and FGSM attack
     parser.add_argument('-ks', '--kernel_size', type=int, default=3,
                         help='size of the transposed convolution kernels')
+    parser.add_argument('-pks', '--para_kernel_size', type=int, default=0,
+                        help='size of the parallel transposed convolution kernels')
     parser.add_argument('-it', '--iterations', type=int, default=1,
                         help='number of iterations for adversarial attack')
     parser.add_argument('-at', '--attack', type=str, default='fgsm', choices={'fgsm', 'cospgd', 'pgd'},

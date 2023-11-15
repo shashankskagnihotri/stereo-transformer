@@ -6,7 +6,10 @@
 #SBATCH --gres=gpu:4
 #SBATCH --mem=230G
 #SBATCH --cpus-per-task=64
-#SBATCH --output=slurm/neurips/0pgd_vanilla_%A.out
+#SBATCH --output=slurm/tmlr/pgd_%A.out
+#SBATCH --error=slurm/tmlr/pgd_%A.err
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=shashank.agnihotri@uni-siegen.de
 
 #reload
 #sttr
@@ -16,17 +19,18 @@
 CUDA_VISIBLE_DEVICES=0
 python main_fgsm.py  --epochs 15\
                 --batch_size 1\
-                --checkpoint correct_neurips_pgd\
+                --checkpoint $7\
                 --pre_train\
-                --num_workers 64\
+                --num_workers 8\
                 --dataset sceneflow\
-                --dataset_directory /work/ws-tmp/sa058646-segment2/stereo-transformer/data/SCENE_FLOW\
-                --kernel_size 3\
-                --resume /work/ws-tmp/sa058646-segment2/stereo-transformer/run/sceneflow/vanilla/experiment_3/epoch_14_model.pth.tar\
+                --dataset_directory data/SCENE_FLOW\
+                --kernel_size $4\
+                --para_kernel_size $5\
+                --resume $6\
                 --eval\
                 --fgsm\
-                --epsilon $1\
-                -it $3\
-                -at fgsm\
-                --alpha $2
+                --epsilon $2\
+                -it $1\
+                -at pgd\
+                --alpha $3
 

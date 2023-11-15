@@ -7,6 +7,9 @@ import torch.nn.functional as F
 
 from utilities.misc import NestedTensor
 
+import cospgd
+from cospgd import functions
+
 
 def write_summary(stats, summary, epoch, mode):
     """
@@ -69,10 +72,10 @@ def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args
     
 
     if args.attack == 'cospgd' or args.attack == 'pgd':
-        moise = torch.FloatTensor(inputs.left.shape).uniform_(-1*args.epsilon, args.epsilon).cuda()
+        noise = torch.FloatTensor(inputs.left.shape).uniform_(-1*args.epsilon, args.epsilon).cuda()
         inputs.left = inputs.left + noise
         inputs.right = inputs.right + noise
-        inputs.left = inputs.left.clamp(orig_left_min, orig_left_min)
+        inputs.left = inputs.left.clamp(orig_left_min, orig_left_max)
         inputs.right = inputs.right.clamp(orig_right_min, orig_right_max)
 
         if args.iterations ==1:

@@ -6,12 +6,14 @@
 #SBATCH --gres=gpu:4
 #SBATCH --mem=230G
 #SBATCH --cpus-per-task=64
-###SBATCH --output=slurm/neurips/0again_new_multi_cospgd_%A.out
+
 
 #reload
 #sttr
 #module unload pytorch-py37-cuda11.2-gcc8/1.9.1
 #pip install typing-extensions
+
+echo $6
 
 CUDA_VISIBLE_DEVICES=0
 python main_fgsm.py  --epochs 15\
@@ -30,4 +32,6 @@ python main_fgsm.py  --epochs 15\
                 -at $4\
                 --alpha $2\
                 --targeted $5
+
+###SBATCH --output=slurm/neurips/0again_new_multi_cospgd_%A.out                
 

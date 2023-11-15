@@ -6,6 +6,9 @@ import torch
 
 from utilities.misc import NestedTensor
 
+import cospgd
+from cospgd import functions
+
 
 def write_summary(stats, summary, epoch, mode):
     """
@@ -18,18 +21,6 @@ def write_summary(stats, summary, epoch, mode):
     summary.writer.add_scalar(mode + '/epe', stats['epe'], epoch)
     summary.writer.add_scalar(mode + '/iou', stats['iou'], epoch)
     summary.writer.add_scalar(mode + '/3px_error', stats['px_error_rate'], epoch)
-
-# FGSM attack code
-def fgsm_attack(image, epsilon, data_grad):
-    # Collect the element-wise sign of the data gradient
-    sign_data_grad = data_grad.sign()
-    # Create the perturbed image by adjusting each pixel of the input image
-    perturbed_image = image + epsilon*sign_data_grad
-    # Adding clipping to maintain [0,1] range
-    #perturbed_image = torch.clamp(perturbed_image, 0, 1)
-    # Return the perturbed image
-    return perturbed_image
-
 
 def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args=None):
     """
@@ -44,6 +35,8 @@ def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args
 
     # build the input
     inputs = NestedTensor(left, right, disp=disp, occ_mask=occ_mask, occ_mask_right=occ_mask_right)
+    orig_left = inputs.left.clone()
+    orig_right = inputs.right.clone()
 
     inputs.left.requires_grad=True
     inputs.right.requires_grad=True    
@@ -62,8 +55,10 @@ def forward_pass(model, data, device, criterion, stats, idx=0, logger=None, args
     losses['aggregated'].backward()
 
     #logger.info("ATTACKING WITH FGSM")
-    inputs.left = fgsm_attack(inputs.left, args.epsilon, inputs.left.grad)
-    right.left = fgsm_attack(inputs.right, args.epsilon, inputs.right.grad)
+    inputs.left = functions.step_inf(perturbed_image = inputs.left, epsilon=args.epsilon, data_grad=inputs.left.grad, orig_image= orig_left, alpha=args.alpha, targeted=False, clamp_min=0, clamp_max=1)
+    inputs.right = functions.step_inf(perturbed_image = inputs.right, epsilon=args.epsilon, data_grad=inputs.right.grad, orig_image= orig_right, alpha=args.alpha, targeted=False, clamp_min=0, clamp_max=1)
+    #inputs.left = fgsm_attack(inputs.left, args.epsilon, inputs.left.grad)
+    #right.left = fgsm_attack(inputs.right, args.epsilon, inputs.right.grad)
 
     with torch.no_grad():
         outputs, left_feats, right_feats = model(inputs)

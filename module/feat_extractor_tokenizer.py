@@ -14,18 +14,26 @@ class TransitionUp(nn.Module):
     Scale the resolution up by transposed convolution
     """
 
-    def __init__(self, in_channels: int, out_channels: int, scale: int = 2, kernel_size=None):
+    def __init__(self, in_channels: int, out_channels: int, scale: int = 2, kernel_size=None, para_kernel_size=0):
         super().__init__()
 
         #import ipdb;ipdb.set_trace()
-        self.kernel_size = 11 if kernel_size is None else kernel_size
+        self.kernel_size = 3 if kernel_size is None else kernel_size
+        self.para_kernel_size = None if para_kernel_size is None else para_kernel_size
         self.padding = (kernel_size -3)//2
+        self.para_padding = (para_kernel_size -3)//2
         self.convTrans = nn.ConvTranspose2d(
             in_channels=in_channels, out_channels=out_channels,
             kernel_size=self.kernel_size, stride=2, padding=self.padding, bias=True, groups=in_channels)
+        self.parallel_kernel = nn.ConvTranspose2d(
+            in_channels=in_channels, out_channels=out_channels,
+            kernel_size=self.para_kernel_size, stride=2, padding=self.para_padding, bias=True, groups=in_channels) if para_kernel_size> 0 else None
 
     def forward(self, x: Tensor, skip: Tensor):
-        out = self.convTrans(x)
+        if self.parallel_kernel == None:
+            out = self.convTrans(x)
+        else:
+            out = self.convTrans(x) + self.parallel_kernel(x)
         out = center_crop(out, skip.size(2), skip.size(3))
         out = torch.cat([out, skip], 1)
         return out
@@ -57,7 +65,7 @@ class Tokenizer(nn.Module):
     Expanding path of feature descriptor using DenseBlocks
     """
 
-    def __init__(self, block_config: int, hidden_dim: int, backbone_feat_channel: list, growth_rate: int, kernel_size=None):
+    def __init__(self, block_config: int, hidden_dim: int, backbone_feat_channel: list, growth_rate: int, kernel_size=None, para_kernel_size=None):
         super(Tokenizer, self).__init__()
 
         backbone_feat_channel.reverse()  # reverse so we have high-level first (lowest-spatial res)
@@ -74,13 +82,13 @@ class Tokenizer(nn.Module):
         prev_block_channels = growth_rate * block_config
 
         # 1/8
-        up.append(TransitionUp(prev_block_channels, prev_block_channels, kernel_size=kernel_size))
+        up.append(TransitionUp(prev_block_channels, prev_block_channels, kernel_size=kernel_size, para_kernel_size=para_kernel_size))
         cur_channels_count = prev_block_channels + backbone_feat_channel[1]
         dense_block.append(_DenseBlock(block_config, cur_channels_count, 4, drop_rate=0.0, growth_rate=growth_rate))
         prev_block_channels = growth_rate * block_config
 
         # 1/4
-        up.append(TransitionUp(prev_block_channels, prev_block_channels, kernel_size=kernel_size))
+        up.append(TransitionUp(prev_block_channels, prev_block_channels, kernel_size=kernel_size, para_kernel_size=para_kernel_size))
         cur_channels_count = prev_block_channels + backbone_feat_channel[2]
         dense_block.append(_DenseBlock(block_config, cur_channels_count, 4, drop_rate=0.0, growth_rate=growth_rate))
 
@@ -115,4 +123,4 @@ class Tokenizer(nn.Module):
 def build_tokenizer(args, layer_channel):
     block_config = 4
     growth_rate = 16
-    return Tokenizer(block_config, args.channel_dim, layer_channel, growth_rate, kernel_size=args.kernel_size)
+    return Tokenizer(block_config, args.channel_dim, layer_channel, growth_rate, kernel_size=args.kernel_size, para_kernel_size=args.para_kernel_size)
